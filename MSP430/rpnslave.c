@@ -1,5 +1,5 @@
 /**   RPN Scientific Calculator for MSP430
- *    Copyright (C) 2013 Joey Shepard
+ *    Copyright (C) 2014 Joey Shepard
  *
  *    This program is free software: you can redistribute it and/or modify
  *    it under the terms of the GNU General Public License as published by
@@ -67,7 +67,7 @@ static unsigned char TrigPrep(unsigned int stack_ptr_copy,unsigned char *cosine)
 
 static void SetDecPlaces();
 
-#pragma MM_OFFSET 2000
+#pragma MM_OFFSET 0
 #pragma MM_GLOBALS
   unsigned char p0[260]; //PowBCD, LnBCD, ExpBCD, TanBCD, AtanBCD, typing,    CompBCD
   unsigned char p1[260]; //PowBCD, LnBCD, ExpBCD, TanBCD, AtanBCD, DrawStack, CompBCD, CompVarBCD
@@ -88,7 +88,7 @@ static void SetDecPlaces();
   unsigned char perm_zero[4];
   unsigned char perm_K[36];
   unsigned char perm_log10[36];
-  unsigned char BCD_stack[2600];
+  unsigned char BCD_stack[52000];
   unsigned char stack_buffer[260];
 #pragma MM_END
 
@@ -110,11 +110,10 @@ int main(void)
   UCA0BR0 = 131;
   UCA0BR1 = 0;
   UCA0CTL1&=~UCSWRST;
-  //UC0IE |= UCA0RXIE | UCA0TXIE;
   __enable_interrupt();
 
   UCB0CTL1=UCSWRST;
-  UCB0CTL0=UCCKPL|UCMST|UCSYNC;//|UCMSB;
+  UCB0CTL0=UCCKPL|UCMST|UCSYNC;
   UCB0CTL1|=UCSSEL_2;
   UCB0BR0=0;
   UCB0BR1=0;
@@ -126,71 +125,12 @@ int main(void)
   P2SEL=0;
   P2SEL2=0;
 
-  //This is important!
   P1OUT=RAM_OE|RAM_WE;
-  //P1OUT&=~SLAVE_CLOCK;
-  P1DIR=RAM_OE|RAM_WE|ADDRESS_LATCH|LED|UART_TXD;//UART_TXD necessary?
+  P1DIR=RAM_OE|RAM_WE|ADDRESS_LATCH|LED|UART_TXD;
 
   P2DIR=0;
 
-  //unsigned int a0=0;
-  //unsigned char data=0,counter=0;
-
-  //delay_ms(5000);
-
-  /*for (;;)
-  {
-    P1OUT^=LED;
-    UART_Send(data++);
-    UART_Send(data++);
-    UART_Send(data++);
-    delay_ms(1000);
-  }*/
-
-  /*#define A_MAX 65535
-  for (;;)
-  {
-    P1OUT^=LED;
-    for (a0=0;a0<A_MAX;a0++)
-    {
-      RAM_Write((unsigned char *)a0,2*(a0%97));
-      //__delay_cycles(5000);
-    }
-    for (a0=0;a0<A_MAX;a0++)
-    {
-      data=RAM_Read((unsigned char *)a0);
-      //__delay_cycles(5000);
-      if (data!=(2*(a0%97)))
-      {
-        UART_Send(0);
-        UART_Send(a0>>8);
-        UART_Send(a0&0xFF);
-        UART_Send(data);
-        UART_Send(2*(a0%97));
-        UART_Send(RAM_Read((unsigned char *)a0));
-        UART_Send(counter);
-        for (;;)
-        {
-          P1OUT&=~LED;
-          delay_ms(600);
-          P1OUT|=LED;
-          delay_ms(200);
-          P1OUT&=~LED;
-          delay_ms(200);
-          P1OUT|=LED;
-          delay_ms(200);
-        }
-      }
-    }
-    counter++;
-  }*/
-
   #pragma MM_ASSIGN_GLOBALS
-
-  /*for (;;)
-  {
-    UART_SendWord(UART_ReceiveWord(false),true);
-  }*/
 
   unsigned int a0,a1,a2,a3;
   unsigned char b0,b1;
@@ -200,7 +140,6 @@ int main(void)
 
   for (;;)
   {
-    //This could be collapsed with function pointers
     command=UART_Receive(false);
     P1OUT|=LED;
     switch (command)
@@ -367,29 +306,10 @@ int main(void)
         Settings.LogTableSize=UART_Receive(false);
         Settings.TrigTableSize=UART_Receive(false);
         break;
-      case SlaveSetDecPlaces:
-        SetDecPlaces();
-        UART_Ready();
-        break;
     }
     P1OUT&=~LED;
   }
 }
-
-/*
-#pragma vector=USCIAB0RX_VECTOR
-__interrupt void USCI0RX_ISR(void)
-{
-  UC0IFG &= ~UCA0RXIFG;
-  RXD_Buff = UCA0RXBUF;
-}
-
-#pragma vector=USCIAB0TX_VECTOR
-__interrupt void USCI0TX_ISR(void)
-{
-  UC0IFG &= ~UCA0TXIFG;
-}
-*/
 
 static void Init()
 {
@@ -397,59 +317,39 @@ static void Init()
   Settings.DegRad=true;
   Settings.LogTableSize=MATH_LOG_TABLE;
   Settings.TrigTableSize=MATH_TRIG_TABLE;
-
-  ImmedBCD("0",perm_zero);
-  ImmedBCD(K,perm_K);
-  ImmedBCD(log10_factor,perm_log10);
 }
 
 static unsigned char RAM_Read(const unsigned char *a1)
 {
   volatile unsigned char value,v2;
-  //while (!(UC0IFG&UCB0TXIFG));
+
   UCB0TXBUF=((unsigned int)a1)>>8;
-  //while (!(UC0IFG&UCB0TXIFG));
+
   UCB0TXBUF=((unsigned int)a1)&0xFF;
   __delay_cycles(10);
-  //__delay_cycles(100);
   P1OUT&=~ADDRESS_LATCH;
-  //__delay_cycles(100);
   P1OUT|=ADDRESS_LATCH;
-  //__delay_cycles(100);
   P1OUT&=~RAM_OE;
-  //__delay_cycles(100);
   value=P2IN;
-  //__delay_cycles(100);
-  //v2=P2IN;
-  //if (value!=v2) value=v2+1;
   P1OUT|=RAM_OE;
   return value;
 }
 
 static void RAM_Write(const unsigned char *a1, const unsigned char byte)
 {
-  //*(((unsigned char*)&foo)+1) should be faster
-  //while (!(UC0IFG&UCB0TXIFG));
   UCB0TXBUF=((unsigned int)a1)>>8;
-  //while (!(UC0IFG&UCB0TXIFG));
   UCB0TXBUF=((unsigned int)a1)&0xFF;
   __delay_cycles(10);
-  //__delay_cycles(1000);
   P1OUT&=~ADDRESS_LATCH;
-  //__delay_cycles(1000);
   P1OUT|=ADDRESS_LATCH;
-  //__delay_cycles(1000);
   P1OUT|=RAM_OE;//this is redundant
   P2OUT=byte;
   P2DIR=0xFF;
-  //__delay_cycles(1000);
   P1OUT&=~RAM_WE;
-  //__delay_cycles(1000);
   P1OUT|=RAM_WE;
   P2DIR=0;
 }
 
-//maybe BCD isn't that efficient
 static void MakeTables()
 {
   //Log table
@@ -569,7 +469,6 @@ static void MakeTables()
   1 ,0x02,
   1 ,0x01,
   //Trig table
-  //this could be done by doubling
   17 ,0x45,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
   17 ,0x26,0x56,0x50,0x51,0x17,0x70,0x77,0x98,0x93,0x51,0x57,0x21,0x93,0x72,0x04,0x53,0x29,
   17 ,0x14,0x03,0x62,0x43,0x46,0x79,0x26,0x47,0x85,0x82,0x89,0x23,0x20,0x15,0x91,0x63,0x42,
@@ -719,13 +618,9 @@ static void AddBCD(unsigned char *result, const unsigned char *n1, const unsigne
   unsigned char carry;
   const unsigned char *temp;
   unsigned char sign;
-  //pointer to loop through number, length of BCD so don't have to keep checking
   int BCD_ptr, BCD_end;
-  //where to stop counting if whole parts are different
   int n1_whole=0, n2_whole=0;
-  //where to start counting if decimal lengths are different
   int n1_dec=0, n2_dec=0;
-  //number to add when carrying. set to 9 for subtraction.
   unsigned char carry_number=0;
   bool subtracting=false;
   int t1,t2,d1,d2;
@@ -770,7 +665,6 @@ static void AddBCD(unsigned char *result, const unsigned char *n1, const unsigne
     subtracting=true;
   }
 
-  //make result whole part equal to the greater of operand whole parts + 1
   t1=n1[BCD_DEC];
   t2=n2[BCD_DEC];
   if (t1>t2)
@@ -784,7 +678,6 @@ static void AddBCD(unsigned char *result, const unsigned char *n1, const unsigne
     result[BCD_DEC]=t2;
   }
 
-  //make decimal length equal to the greater of operand decimal lengths
   d1=n1[BCD_LEN];
   d2=n2[BCD_LEN];
 
@@ -988,7 +881,6 @@ static void DivBCD(unsigned char *result, const unsigned char *n1, const unsigne
   if ((n2[BCD_LEN]-n2[BCD_DEC])>max_offset) max_offset=n2[BCD_LEN]-n2[BCD_DEC];
   if (Settings.DecPlaces>max_offset) max_offset=Settings.DecPlaces;
 
-  //result[BCD_SIGN]=0;
   result[BCD_LEN]=0;
 
   result_ptr=3;
@@ -1097,7 +989,7 @@ static void DivBCD(unsigned char *result, const unsigned char *n1, const unsigne
     {
       logic=true;
     }
-    else if (((result[BCD_LEN]-result[BCD_DEC])<(max_offset+1))/*&&(!IsZero(div_buff1))*/)
+    else if (((result[BCD_LEN]-result[BCD_DEC])<(max_offset+1)))
     {
       logic=true;
     }
@@ -1603,28 +1495,4 @@ static unsigned char TrigPrep(unsigned int stack_ptr_copy,unsigned char *cosine)
     *cosine=0;
   }
   return sine;
-}
-
-static void SetDecPlaces()
-{
-  int i,j=2;
-
-  for (i=0;i<MATH_TRIG_TABLE;i++)
-  {
-    trig[i*MATH_ENTRY_SIZE+BCD_LEN]=j+Settings.DecPlaces;
-    if (IsZero(trig+i*MATH_ENTRY_SIZE)) break;
-  }
-
-  Settings.TrigTableSize=i;
-
-  for (i=0;i<MATH_LOG_TABLE;i++)
-  {
-    logs[i*MATH_ENTRY_SIZE+BCD_LEN]=j+Settings.DecPlaces;
-    if (IsZero(logs+i*MATH_ENTRY_SIZE)) break;
-  }
-
-  Settings.LogTableSize=i;
-
-  perm_K[BCD_LEN]=1+Settings.DecPlaces;
-  perm_log10[BCD_LEN]=1+Settings.DecPlaces;
 }
