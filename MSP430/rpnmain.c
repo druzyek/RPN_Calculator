@@ -1,5 +1,5 @@
 /**   RPN Scientific Calculator for MSP430
- *    Copyright (C) 2013 Joey Shepard
+ *    Copyright (C) 2014 Joey Shepard
  *
  *    This program is free software: you can redistribute it and/or modify
  *    it under the terms of the GNU General Public License as published by
@@ -51,7 +51,7 @@ static const char KeyMatrix[]={0 ,'z','0','.','m','+','p','r',
                                   'w','4','5','6','*','n','u',
                                    13,'7','8','9','/', 83, 8 ,
                                   'b','s','c','t', 75, 80, 77,
-                                  ' ','e','l', 0 ,'o', 72, 27};
+                                  ' ','e','l','v','o', 72, 27};
 
 #pragma MM_READ RAM_Read
 #pragma MM_WRITE RAM_Write
@@ -109,9 +109,8 @@ static void TestRAM();
 
 #define ClrLCD() LCD_Byte(1,0)
 #define putchar(x) LCD_Byte(x,1)
-#define DrawBusy() gotoxy(19,0);LCD_Byte(7,1);
 
-#pragma MM_OFFSET 2000
+#pragma MM_OFFSET 0
 #pragma MM_GLOBALS
   unsigned char p0[260]; //PowBCD, LnBCD, ExpBCD, TanBCD, AtanBCD, typing,    CompBCD
   unsigned char p1[260]; //PowBCD, LnBCD, ExpBCD, TanBCD, AtanBCD, DrawStack, CompBCD, CompVarBCD
@@ -132,12 +131,13 @@ static void TestRAM();
   unsigned char perm_zero[4];
   unsigned char perm_K[36];
   unsigned char perm_log10[36];
-  unsigned char BCD_stack[2600];
+  unsigned char BCD_stack[52000];
   unsigned char stack_buffer[260];
 #pragma MM_END
 
 struct SettingsType Settings;
-unsigned int stack_ptr;
+unsigned int stack_ptr[2];
+unsigned int which_stack;
 
 int main(void)
 {
@@ -145,8 +145,6 @@ int main(void)
 
   BCSCTL1=CALBC1_16MHZ;
   DCOCTL=CALDCO_16MHZ;
-
-  //delay_ms(1);
 
   BCSCTL3 |= LFXT1S_2;
 
@@ -156,7 +154,6 @@ int main(void)
   UCA0BR0 = 131;
   UCA0BR1 = 0;
   UCA0CTL1&=~UCSWRST;
-  //UC0IE |= UCA0RXIE | UCA0TXIE;
 
   P1SEL=(UART_TXD|UART_RXD);
   P1SEL2=(UART_TXD|UART_RXD);
@@ -170,129 +167,7 @@ int main(void)
   P1DIR=0xFF & ~(UART_TXD|UART_RXD|SR_DATA);
   P2DIR=0xFF;
 
-  TACCR0 = 1200;
-  TACCTL0 = CCIE;
-  TACTL = MC_1|ID_0|TASSEL_1|TACLR;
-  //__enable_interrupt();
-
-  //LCD_Init();
-  //delay_ms(100);
-
   #pragma MM_ASSIGN_GLOBALS
-
-  /*gotoxy(0,1);
-  LCD_Text("Testing");
-
-  for (;;)
-  {
-    //LCD_Byte(0x80+0x0,0);
-    key=GetKey();
-    gotoxy(0,3);
-    LCD_Num(key);
-    delay_ms(500);
-  }*/
-
-
-
-  /*gotoxy(0,0);
-  for (;;)
-  {
-    LCD_Hex(UART_Receive());
-    UART_Ready();
-    putchar(' ');
-  }*/
-
-  /*for (;;)
-  {
-    UART_RecFast();
-    gotoxy(0,0);
-    LCD_Text("A: ");
-    LCD_Hex(UART_Receive());
-    UART_Ready();
-    LCD_Hex(UART_Receive());
-    UART_Ready();
-    putchar('=');
-    LCD_Hex(UART_Receive());
-    UART_Ready();
-    gotoxy(0,1);
-    LCD_Text("V=");
-    LCD_Hex(UART_Receive());
-    UART_Ready();
-    gotoxy(0,2);
-    LCD_Text("Read 2:");
-    LCD_Hex(UART_Receive());
-    UART_Ready();
-    gotoxy(0,3);
-    LCD_Text("Count=");
-    LCD_Hex(UART_Receive());
-    UART_Ready();
-  }*/
-
-  /*
-  #pragma MM_DECLARE
-  unsigned char n1[260];
-  unsigned char n2[260];
-  unsigned char n3[260];
-  unsigned char n4[260];
-  #pragma MM_END
-  */
-
-  /*unsigned char rv=0;
-  unsigned int rv2,rv3;
-  for (rv=5;;rv++)
-  {
-    rv3=(rv<<8)|(rv+1);
-    UART_SendWord(rv3,true);
-    rv2=UART_ReceiveWord(false);
-    gotoxy(0,0);
-    LCD_Hex(rv3>>8);
-    LCD_Hex(rv3&0xFF);
-    putchar(' ');
-    LCD_Hex(rv2>>8);
-    LCD_Hex(rv2&0xFF);
-
-    if (rv3!=rv2)
-    {
-      gotoxy(0,1);
-      LCD_Text("Mismatch");
-      for(;;);
-    }
-    delay_ms(500);
-  }
-
-  unsigned char c0=8,c1=0;
-  LCD_Text("Testing...");
-
-  for (;;)
-  {
-    if (c0++==10)
-    {
-      gotoxy(15,0);
-      LCD_Hex(c1++);
-      c0=0;
-    }
-    ImmedBCD("123456",n1);
-    ImmedBCD("876544",n2);
-    AddBCD(n3,n1,n2);
-
-    gotoxy(0,0);
-    PrintBCD(n1,-1);
-    putchar('+');
-    gotoxy(0,1);
-    PrintBCD(n2,-1);
-    putchar('=');
-    gotoxy(0,2);
-    PrintBCD(n3,-1);
-
-    gotoxy(0,3);
-    if (CompBCD("1000000",n3)==COMP_EQ) LCD_Text("Match!");
-    else
-    {
-      P1OUT&=~BUFFER_EN;
-      LCD_Text("No match!");
-      for (;;);
-    }
-  }*/
 
   int key,i=0,j=0,k=0,x=0,y=0;
   bool shift=false, clear_shift=false, redraw=true, input=false;
@@ -303,14 +178,12 @@ int main(void)
 
   Init();
 
-  ErrorMsg("Finished");
-
   do
   {
     if (redraw)
     {
       ClrLCD();
-      DrawStack(menu,input,stack_ptr);
+      DrawStack(menu,input,stack_ptr[which_stack]);
       redraw=false;
     }
     if (redraw_input)
@@ -323,7 +196,7 @@ int main(void)
     {
       key=KeyMatrix[GetKey()];
     } while (key==0);
-    delay_ms(500);
+    while (KeyMatrix[GetKey()]);
 
     j=0;
     do
@@ -339,7 +212,7 @@ int main(void)
     {
       if (input==false)
       {
-        if (stack_ptr==STACK_SIZE)
+        if (stack_ptr[which_stack]==STACK_SIZE)
         {
           ErrorMsg("Stack full");
           redraw=true;
@@ -348,7 +221,7 @@ int main(void)
         {
           input=true;
           ClrLCD();
-          DrawStack(menu,input,stack_ptr);
+          DrawStack(menu,input,stack_ptr[which_stack]);
           input_offset=0;
           input_ptr=1;
           p0[0]=key;
@@ -495,10 +368,10 @@ int main(void)
         else
         {
           SetBlink(false);
-          BufferBCD(p0,BCD_stack+stack_ptr*MATH_CELL_SIZE);
-          if (IsZero(BCD_stack+stack_ptr*MATH_CELL_SIZE)&&(BCD_stack[stack_ptr*MATH_CELL_SIZE+BCD_SIGN])) BCD_stack[stack_ptr*MATH_CELL_SIZE+BCD_SIGN]=0;
-          FullShrinkBCD(BCD_stack+stack_ptr*MATH_CELL_SIZE);
-          stack_ptr++;
+          BufferBCD(p0,BCD_stack+stack_ptr[which_stack]*MATH_CELL_SIZE);
+          if (IsZero(BCD_stack+stack_ptr[which_stack]*MATH_CELL_SIZE)&&(BCD_stack[stack_ptr[which_stack]*MATH_CELL_SIZE+BCD_SIGN])) BCD_stack[stack_ptr[which_stack]*MATH_CELL_SIZE+BCD_SIGN]=0;
+          FullShrinkBCD(BCD_stack+stack_ptr[which_stack]*MATH_CELL_SIZE);
+          stack_ptr[which_stack]++;
           input=false;
         }
         redraw=true;
@@ -510,17 +383,17 @@ int main(void)
       switch (key)
       {
         case '+':
-          if (stack_ptr>=2)
+          if (stack_ptr[which_stack]>=2)
           {
-            AddBCD(stack_buffer,BCD_stack+(stack_ptr-2)*MATH_CELL_SIZE,BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE);
+            AddBCD(stack_buffer,BCD_stack+(stack_ptr[which_stack]-2)*MATH_CELL_SIZE,BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE);
             process_output=2;
             redraw=true;
           }
           break;
         case '-':
-          if (stack_ptr>=2)
+          if (stack_ptr[which_stack]>=2)
           {
-            SubBCD(stack_buffer,BCD_stack+(stack_ptr-2)*MATH_CELL_SIZE,BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE);
+            SubBCD(stack_buffer,BCD_stack+(stack_ptr[which_stack]-2)*MATH_CELL_SIZE,BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE);
             process_output=2;
             redraw=true;
           }
@@ -528,15 +401,15 @@ int main(void)
         case '/':
           if (!shift)
           {
-            if (stack_ptr>=2)
+            if (stack_ptr[which_stack]>=2)
             {
-              if (IsZero(BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE))
+              if (IsZero(BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE))
               {
                 ErrorMsg("Divide by zero");
               }
               else
               {
-                DivBCD(stack_buffer,BCD_stack+(stack_ptr-2)*MATH_CELL_SIZE,BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE);
+                DivBCD(stack_buffer,BCD_stack+(stack_ptr[which_stack]-2)*MATH_CELL_SIZE,BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE);
                 process_output=2;
               }
               redraw=true;
@@ -544,16 +417,16 @@ int main(void)
           }
           else//mod
           {
-            if (stack_ptr>=2)
+            if (stack_ptr[which_stack]>=2)
             {
-              if (IsZero(BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE))
+              if (IsZero(BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE))
               {
                 ErrorMsg("Invalid Input");
               }
               else
               {
-                CopyBCD(p3,BCD_stack+(stack_ptr-2)*MATH_CELL_SIZE);
-                CopyBCD(p2,BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE);
+                CopyBCD(p3,BCD_stack+(stack_ptr[which_stack]-2)*MATH_CELL_SIZE);
+                CopyBCD(p2,BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE);
 
                 if (p3[BCD_SIGN]==1) j=1;
                 else j=0;
@@ -578,70 +451,70 @@ int main(void)
           }
           break;
         case '*':
-          if (stack_ptr>=2)
+          if (stack_ptr[which_stack]>=2)
           {
-            MultBCD(stack_buffer,BCD_stack+(stack_ptr-2)*MATH_CELL_SIZE,BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE);
+            MultBCD(stack_buffer,BCD_stack+(stack_ptr[which_stack]-2)*MATH_CELL_SIZE,BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE);
             process_output=2;
             redraw=true;
           }
           break;
         case KEY_BACKSPACE:
         case KEY_DELETE:
-          if (stack_ptr>=1)
+          if (stack_ptr[which_stack]>=1)
           {
-            stack_ptr--;
+            stack_ptr[which_stack]--;
             redraw=true;
           }
           break;
         case KEY_ENTER:
         case 'd'://dupe
-          if (stack_ptr>=1)
+          if (stack_ptr[which_stack]>=1)
           {
-            if (stack_ptr==STACK_SIZE)
+            if (stack_ptr[which_stack]==STACK_SIZE)
             {
               ErrorMsg("Stack full");
             }
             else
             {
-              CopyBCD(BCD_stack+(stack_ptr)*MATH_CELL_SIZE,BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE);
-              stack_ptr++;
+              CopyBCD(BCD_stack+(stack_ptr[which_stack])*MATH_CELL_SIZE,BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE);
+              stack_ptr[which_stack]++;
             }
             redraw=true;
           }
           break;
         case KEY_LEFT:
-          if (stack_ptr>=1)
+          if (stack_ptr[which_stack]>=1)
           {
-            RolBCD(stack_buffer,BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE,1);
+            RolBCD(stack_buffer,BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE,1);
             process_output=1;
             redraw=true;
           }
           break;
         case KEY_RIGHT:
-          if (stack_ptr>=1)
+          if (stack_ptr[which_stack]>=1)
           {
-            RorBCD(stack_buffer,BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE,1);
+            RorBCD(stack_buffer,BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE,1);
             process_output=1;
             redraw=true;
           }
           break;
         case KEY_UP:
-          if (stack_ptr>=2)
+          if (stack_ptr[which_stack]>=2)
           {
             CopyBCD(stack_buffer,BCD_stack);
-            for (i=0;i<(stack_ptr-1);i++)
+            for (i=0;i<(stack_ptr[which_stack]-1);i++)
             {
               CopyBCD(BCD_stack+i*MATH_CELL_SIZE,BCD_stack+(i+1)*MATH_CELL_SIZE);
             }
-            CopyBCD(BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE,stack_buffer);
+            CopyBCD(BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE,stack_buffer);
             redraw=true;
           }
           break;
         case KEY_DOWN:
-          if (stack_ptr>=2)
+          if (stack_ptr[which_stack]>=2)
           {
-            CopyBCD(stack_buffer,BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE);
-            for (i=(stack_ptr-1);i>0;i--)
+            CopyBCD(stack_buffer,BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE);
+            for (i=(stack_ptr[which_stack]-1);i>0;i--)
             {
               CopyBCD(BCD_stack+(i)*MATH_CELL_SIZE,BCD_stack+(i-1)*MATH_CELL_SIZE);
             }
@@ -655,15 +528,45 @@ int main(void)
           else P2OUT&=~LED_2ND;
           clear_shift=false;
           break;
-        case 'b'://program
+        case 'b'://test
+          P1OUT&=~RAM_BANK;
+          TestRAM();
+          P1OUT|=RAM_BANK;
+          TestRAM();
+
+          if (which_stack==0) P1OUT&=~RAM_BANK;
+          else P1OUT|=RAM_BANK;
+
+          ClrLCD();
+          LCD_Text("Press a key...");
+          gotoxy(0,2);
+          LCD_Text("Key: 00");
+          gotoxy(0,3);
+          LCD_Text("Code: 00");
+          i=0;
+          j=0;
+          do
+          {
+            j=GetKey();
+            if (j!=i)
+            {
+              gotoxy(5,2);
+              LCD_Hex(j);
+              gotoxy(6,3);
+              LCD_Hex(KeyMatrix[j]);
+              i=j;
+            }
+          } while (KeyMatrix[j]!=27);
+          key=0;
+          redraw=true;
           break;
         case 'c'://cosine
           if (!shift)
           {
-            if (stack_ptr>=1)
+            if (stack_ptr[which_stack]>=1)
             {
-              BCD_stack[(stack_ptr-1)*MATH_CELL_SIZE+BCD_SIGN]=0;
-              TrigPrep(stack_ptr,&j);
+              BCD_stack[(stack_ptr[which_stack]-1)*MATH_CELL_SIZE+BCD_SIGN]=0;
+              TrigPrep(stack_ptr[which_stack],&j);
               if (IsZero(p3)) ImmedBCD("1",stack_buffer);
               else TanBCD(p4,stack_buffer,p3);
               if (j==1) stack_buffer[BCD_SIGN]=1;
@@ -673,12 +576,12 @@ int main(void)
           }
           else//acos
           {
-            if (stack_ptr>=1)
+            if (stack_ptr[which_stack]>=1)
             {
               process_output=1;
-              i=CompBCD("0",BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE);
-              j=CompBCD("1",BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE);
-              k=CompBCD("-1",BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE);
+              i=CompBCD("0",BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE);
+              j=CompBCD("1",BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE);
+              k=CompBCD("-1",BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE);
               if (i==COMP_EQ) ImmedBCD("90",stack_buffer);
               else if (j==COMP_EQ) ImmedBCD("0",stack_buffer);
               else if (k==COMP_EQ) ImmedBCD("180",stack_buffer);
@@ -687,7 +590,7 @@ int main(void)
                 ErrorMsg("Invalid input");
                 process_output=0;
               }
-              else AcosBCD(stack_buffer,BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE);
+              else AcosBCD(stack_buffer,BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE);
               redraw=true;
             }
           }
@@ -695,15 +598,15 @@ int main(void)
         case 'e'://e^x
           if (!shift)
           {
-            if (stack_ptr>=1)
+            if (stack_ptr[which_stack]>=1)
             {
-              if (CompBCD("177",BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE)==COMP_LT)
+              if (CompBCD("177",BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE)==COMP_LT)
               {
                 ErrorMsg("Argument\ntoo large");
               }
               else
               {
-                ExpBCD(stack_buffer,BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE);
+                ExpBCD(stack_buffer,BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE);
                 process_output=1;
               }
               redraw=true;
@@ -711,40 +614,40 @@ int main(void)
           }
           else//10^x
           {
-            if (stack_ptr>=1)
+            if (stack_ptr[which_stack]>=1)
             {
               x=0;
-              j=CompVarBCD(perm_zero,BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE);
+              j=CompVarBCD(perm_zero,BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE);
 
               if (j==COMP_EQ) ImmedBCD("1",stack_buffer);
               else
               {
                 if (j==COMP_GT) j=1;
                 else j=0;
-                BCD_stack[(stack_ptr-1)*MATH_CELL_SIZE+BCD_SIGN]=0;
+                BCD_stack[(stack_ptr[which_stack]-1)*MATH_CELL_SIZE+BCD_SIGN]=0;
 
-                CopyBCD(p2,BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE);
+                CopyBCD(p2,BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE);
                 p2[BCD_LEN]=p2[BCD_DEC];
-                if (CompVarBCD(p2,BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE)==COMP_EQ)//x is an integer
+                if (CompVarBCD(p2,BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE)==COMP_EQ)//x is an integer
                 {
                   ImmedBCD("254",p2);
-                  if (CompVarBCD(BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE,p2)==COMP_GT)
+                  if (CompVarBCD(BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE,p2)==COMP_GT)
                   {
                     i=255;
                   }
                   else
                   {
-                    i=BCD_stack[(stack_ptr-1)*MATH_CELL_SIZE+3]*100;
-                    i+=BCD_stack[(stack_ptr-1)*MATH_CELL_SIZE+4]*10;
-                    i+=BCD_stack[(stack_ptr-1)*MATH_CELL_SIZE+5];
-                    if (BCD_stack[(stack_ptr-1)*MATH_CELL_SIZE+BCD_DEC]==2) i/=10;
-                    else if (BCD_stack[(stack_ptr-1)*MATH_CELL_SIZE+BCD_DEC]==1) i/=100;
+                    i=BCD_stack[(stack_ptr[which_stack]-1)*MATH_CELL_SIZE+3]*100;
+                    i+=BCD_stack[(stack_ptr[which_stack]-1)*MATH_CELL_SIZE+4]*10;
+                    i+=BCD_stack[(stack_ptr[which_stack]-1)*MATH_CELL_SIZE+5];
+                    if (BCD_stack[(stack_ptr[which_stack]-1)*MATH_CELL_SIZE+BCD_DEC]==2) i/=10;
+                    else if (BCD_stack[(stack_ptr[which_stack]-1)*MATH_CELL_SIZE+BCD_DEC]==1) i/=100;
                   }
 
                   if (i>254)
                   {
                     ErrorMsg("Invalid input");
-                    BCD_stack[(stack_ptr-1)*MATH_CELL_SIZE+BCD_SIGN]=j;
+                    BCD_stack[(stack_ptr[which_stack]-1)*MATH_CELL_SIZE+BCD_SIGN]=j;
                     x=1;
                   }
                   else
@@ -762,7 +665,7 @@ int main(void)
                 else
                 {
                   ImmedBCD("10",p5);
-                  PowBCD(stack_buffer,p5,BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE);
+                  PowBCD(stack_buffer,p5,BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE);
                   if (stack_buffer[BCD_DEC]>(Settings.DecPlaces)) stack_buffer[BCD_LEN]=stack_buffer[BCD_DEC];
                   else if (stack_buffer[BCD_LEN]>(Settings.DecPlaces))
                   {
@@ -783,30 +686,30 @@ int main(void)
           }
           break;
         case 'i'://pi
-          if (stack_ptr==STACK_SIZE)
+          if (stack_ptr[which_stack]==STACK_SIZE)
           {
             ErrorMsg("Stack full");
           }
           else
           {
-            stack_ptr++;
-            ImmedBCD(pi,BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE);
-            BCD_stack[(stack_ptr-1)*MATH_CELL_SIZE+BCD_LEN]=1+Settings.DecPlaces;
+            stack_ptr[which_stack]++;
+            ImmedBCD(pi,BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE);
+            BCD_stack[(stack_ptr[which_stack]-1)*MATH_CELL_SIZE+BCD_LEN]=1+Settings.DecPlaces;
           }
           redraw=true;
           break;
         case 'l'://ln
           if (!shift)
           {
-            if (stack_ptr>=1)
+            if (stack_ptr[which_stack]>=1)
             {
-              if (CompVarBCD(perm_zero,BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE)!=COMP_LT)
+              if (CompVarBCD(perm_zero,BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE)!=COMP_LT)
               {
                 ErrorMsg("Invalid input");
               }
               else
               {
-                if (LnBCD(stack_buffer,BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE)) process_output=1;
+                if (LnBCD(stack_buffer,BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE)) process_output=1;
                 else ErrorMsg("Argument\ntoo large");
               }
               redraw=true;
@@ -814,18 +717,18 @@ int main(void)
           }
           else
           {
-            if (stack_ptr>=1)
+            if (stack_ptr[which_stack]>=1)
             {
-              if (CompVarBCD(perm_zero,BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE)!=COMP_LT)
+              if (CompVarBCD(perm_zero,BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE)!=COMP_LT)
               {
                 ErrorMsg("Invalid input");
               }
               else
               {
                 x=0;
-                if (BCD_stack[(stack_ptr-1)*MATH_CELL_SIZE+3]==1)
+                if (BCD_stack[(stack_ptr[which_stack]-1)*MATH_CELL_SIZE+3]==1)
                 {
-                  CopyBCD(p0,BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE);
+                  CopyBCD(p0,BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE);
 
                   j=p0[BCD_DEC];
                   k=p0[BCD_LEN];
@@ -858,7 +761,7 @@ int main(void)
 
                 if (!x)
                 {
-                  if (LnBCD(p3,BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE))
+                  if (LnBCD(p3,BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE))
                   {
                     DivBCD(stack_buffer,p3,perm_log10);
                     process_output=1;
@@ -871,49 +774,47 @@ int main(void)
           }
           break;
         case 'm':// +/-
-          if (stack_ptr>=1)
+          if (stack_ptr[which_stack]>=1)
           {
-            if (CompVarBCD(perm_zero,BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE)!=COMP_EQ)
+            if (CompVarBCD(perm_zero,BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE)!=COMP_EQ)
             {
-              if (BCD_stack[(stack_ptr-1)*MATH_CELL_SIZE+BCD_SIGN]==0)
+              if (BCD_stack[(stack_ptr[which_stack]-1)*MATH_CELL_SIZE+BCD_SIGN]==0)
               {
-                BCD_stack[(stack_ptr-1)*MATH_CELL_SIZE+BCD_SIGN]=1;
+                BCD_stack[(stack_ptr[which_stack]-1)*MATH_CELL_SIZE+BCD_SIGN]=1;
               }
-              else BCD_stack[(stack_ptr-1)*MATH_CELL_SIZE+BCD_SIGN]=0;
+              else BCD_stack[(stack_ptr[which_stack]-1)*MATH_CELL_SIZE+BCD_SIGN]=0;
             }
             redraw=true;
           }
           break;
         case 'n':// 1/x
-          if (stack_ptr>=1)
+          if (stack_ptr[which_stack]>=1)
           {
-            if (IsZero(BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE))
+            if (IsZero(BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE))
             {
               ErrorMsg("Divide by zero");
             }
             else
             {
               ImmedBCD("1",p0);
-              DivBCD(stack_buffer,p0,BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE);
+              DivBCD(stack_buffer,p0,BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE);
               process_output=1;
             }
             redraw=true;
           }
           break;
         case 'o'://round
-          if (stack_ptr>=1)
+          if (stack_ptr[which_stack]>=1)
           {
-            if (BCD_stack[(stack_ptr-1)*MATH_CELL_SIZE+BCD_LEN]>BCD_stack[(stack_ptr-1)*MATH_CELL_SIZE+BCD_DEC])
+            if (BCD_stack[(stack_ptr[which_stack]-1)*MATH_CELL_SIZE+BCD_LEN]>BCD_stack[(stack_ptr[which_stack]-1)*MATH_CELL_SIZE+BCD_DEC])
             {
-              BCD_stack[(stack_ptr-1)*MATH_CELL_SIZE+BCD_LEN]=BCD_stack[(stack_ptr-1)*MATH_CELL_SIZE+BCD_DEC];
-              //printf(">%d<",BCD_stack[(stack_ptr-1)*MATH_CELL_SIZE+BCD_stack[(stack_ptr-1)*MATH_CELL_SIZE+BCD_LEN]+3]);
-              //GetKey();
-              if (BCD_stack[(stack_ptr-1)*MATH_CELL_SIZE+BCD_stack[(stack_ptr-1)*MATH_CELL_SIZE+BCD_LEN]+3]>4)
+              BCD_stack[(stack_ptr[which_stack]-1)*MATH_CELL_SIZE+BCD_LEN]=BCD_stack[(stack_ptr[which_stack]-1)*MATH_CELL_SIZE+BCD_DEC];
+              if (BCD_stack[(stack_ptr[which_stack]-1)*MATH_CELL_SIZE+BCD_stack[(stack_ptr[which_stack]-1)*MATH_CELL_SIZE+BCD_LEN]+3]>4)
               {
                 ImmedBCD("1",p0);
-                AddBCD(stack_buffer,p0,BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE);
+                AddBCD(stack_buffer,p0,BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE);
               }
-              else CopyBCD(stack_buffer,BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE);
+              else CopyBCD(stack_buffer,BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE);
               process_output=1;
             }
             redraw=true;
@@ -921,12 +822,12 @@ int main(void)
           break;
         case 'p'://y^x
         case 'r'://x root y
-          if (stack_ptr>=2)
+          if (stack_ptr[which_stack]>=2)
           {
             x=0;
             if (key=='r')
             {
-              if (IsZero(BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE))
+              if (IsZero(BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE))
               {
                 ErrorMsg("Invalid Input");
                 x=1;
@@ -934,20 +835,20 @@ int main(void)
               else
               {
                 ImmedBCD("1",p3);
-                DivBCD(p5,p3,BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE);
+                DivBCD(p5,p3,BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE);
               }
             }
-            else CopyBCD(p5,BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE);
+            else CopyBCD(p5,BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE);
 
             if (x==0)
             {
               j=CompVarBCD(perm_zero,p5);
-              k=CompVarBCD(perm_zero,BCD_stack+(stack_ptr-2)*MATH_CELL_SIZE);
+              k=CompVarBCD(perm_zero,BCD_stack+(stack_ptr[which_stack]-2)*MATH_CELL_SIZE);
 
               if (k==COMP_GT)
               {
                 y=1;
-                BCD_stack[(stack_ptr-2)*MATH_CELL_SIZE+BCD_SIGN]=0;
+                BCD_stack[(stack_ptr[which_stack]-2)*MATH_CELL_SIZE+BCD_SIGN]=0;
               }
               else y=0;
 
@@ -961,9 +862,9 @@ int main(void)
               else if (j==COMP_EQ) ImmedBCD("1",stack_buffer);
               else
               {
-                CopyBCD(p2,BCD_stack+(stack_ptr-2)*MATH_CELL_SIZE);
+                CopyBCD(p2,BCD_stack+(stack_ptr[which_stack]-2)*MATH_CELL_SIZE);
                 p2[BCD_LEN]=p2[BCD_DEC];
-                if (CompVarBCD(p2,BCD_stack+(stack_ptr-2)*MATH_CELL_SIZE)==COMP_EQ) j=1;
+                if (CompVarBCD(p2,BCD_stack+(stack_ptr[which_stack]-2)*MATH_CELL_SIZE)==COMP_EQ) j=1;
                 else j=0;
                 CopyBCD(p2,p5);
                 p2[BCD_LEN]=p2[BCD_DEC];
@@ -973,19 +874,19 @@ int main(void)
                 {
                   if (j&2)//x is an integer
                   {
-                    ///BCD_stack[(stack_ptr-2)*MATH_CELL_SIZE+BCD_SIGN]=0;
+                    ///BCD_stack[(stack_ptr[which_stack]-2)*MATH_CELL_SIZE+BCD_SIGN]=0;
                   }
                   else
                   {
                     ErrorMsg("Invalid input");
-                    BCD_stack[(stack_ptr-2)*MATH_CELL_SIZE+BCD_SIGN]=(y&1);
+                    BCD_stack[(stack_ptr[which_stack]-2)*MATH_CELL_SIZE+BCD_SIGN]=(y&1);
                     x=1;
                   }
                 }
 
                 if (x==0)
                 {
-                  PowBCD(stack_buffer,BCD_stack+(stack_ptr-2)*MATH_CELL_SIZE,p5);
+                  PowBCD(stack_buffer,BCD_stack+(stack_ptr[which_stack]-2)*MATH_CELL_SIZE,p5);
                   if (stack_buffer[BCD_DEC]>(Settings.DecPlaces))
                   {
                     stack_buffer[BCD_LEN]=stack_buffer[BCD_DEC];
@@ -994,14 +895,6 @@ int main(void)
                   {
                     stack_buffer[BCD_LEN]=Settings.DecPlaces;
                   }
-
-                  if ((j==3)&&(true)) //both are integers
-                  {
-                    //this works only if slightly above
-                    //stack_buffer[BCD_LEN]=stack_buffer[BCD_DEC];
-                    //could also fail if exp is less than 1
-                  }
-
                   if (y&2)
                   {
                     ImmedBCD("1",p2);
@@ -1024,21 +917,21 @@ int main(void)
           }
           break;
         case 'q'://sqrt
-          if (stack_ptr>=1)
+          if (stack_ptr[which_stack]>=1)
           {
-            if (IsZero(BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE))
+            if (IsZero(BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE))
             {
               ImmedBCD("0",stack_buffer);
               process_output=1;
             }
-            else if (BCD_stack[(stack_ptr-1)*MATH_CELL_SIZE+BCD_SIGN]==1)
+            else if (BCD_stack[(stack_ptr[which_stack]-1)*MATH_CELL_SIZE+BCD_SIGN]==1)
             {
               ErrorMsg("Invalid input");
             }
             else
             {
               ImmedBCD("0.5",p5);
-              PowBCD(stack_buffer,BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE,p5);
+              PowBCD(stack_buffer,BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE,p5);
               if (stack_buffer[BCD_DEC]>(Settings.DecPlaces)) stack_buffer[BCD_LEN]=stack_buffer[BCD_DEC];
               else if (stack_buffer[BCD_LEN]>(Settings.DecPlaces))
               {
@@ -1053,15 +946,15 @@ int main(void)
         case 't'://tan
           if (!shift)
           {
-            if (stack_ptr>=1)
+            if (stack_ptr[which_stack]>=1)
             {
-              if (BCD_stack[(stack_ptr-1)*MATH_CELL_SIZE+BCD_SIGN]==1)
+              if (BCD_stack[(stack_ptr[which_stack]-1)*MATH_CELL_SIZE+BCD_SIGN]==1)
               {
-                BCD_stack[(stack_ptr-1)*MATH_CELL_SIZE+BCD_SIGN]=0;
+                BCD_stack[(stack_ptr[which_stack]-1)*MATH_CELL_SIZE+BCD_SIGN]=0;
                 j=1;
               }
               else j=0;
-              j+=TrigPrep(stack_ptr,&k);
+              j+=TrigPrep(stack_ptr[which_stack],&k);
 
               if ((key=='t')&&(CompBCD("90",p3)==COMP_EQ))
               {
@@ -1088,12 +981,12 @@ int main(void)
           {
             if (key=='s')//asin
             {
-              if (stack_ptr>=1)
+              if (stack_ptr[which_stack]>=1)
               {
                 process_output=1;
-                i=CompBCD("0",BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE);
-                j=CompBCD("1",BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE);
-                k=CompBCD("-1",BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE);
+                i=CompBCD("0",BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE);
+                j=CompBCD("1",BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE);
+                k=CompBCD("-1",BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE);
                 if (i==COMP_EQ) ImmedBCD("0",stack_buffer);
                 else if (j==COMP_EQ) ImmedBCD("90",stack_buffer);
                 else if (k==COMP_EQ) ImmedBCD("-90",stack_buffer);
@@ -1102,15 +995,15 @@ int main(void)
                   ErrorMsg("Invalid input");
                   process_output=0;
                 }
-                else AsinBCD(stack_buffer,BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE);
+                else AsinBCD(stack_buffer,BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE);
                 redraw=true;
               }
             }
             else//atan
             {
-              if (stack_ptr>=1)
+              if (stack_ptr[which_stack]>=1)
               {
-                AtanBCD(stack_buffer,BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE);
+                AtanBCD(stack_buffer,BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE);
                 process_output=1;
                 redraw=true;
               }
@@ -1126,21 +1019,48 @@ int main(void)
           gotoxy(1,2);
           LCD_Text("Sci. Not.");
           gotoxy(1,3);
-          LCD_Text("Color stack:");
+          LCD_Text("Battery:");
 
           i=Settings.DecPlaces;
+          j=39;
           x=5;
           y=0;
+          key=0;
           do
           {
-            if (x!=5) key=KeyMatrix[GetKey()];
+            if (x!=5)
+            {
+              if (KeyMatrix[key]) delay_ms(500);
+              key=KeyMatrix[GetKey()];
+            }
+            j++;
+            if (j==40)
+            {
+              j=0;
+              gotoxy(13,3);
+
+              ADC10CTL0 = SREF_1 + REFON + REF2_5V + ADC10ON + ADC10SHT_3;
+              ADC10CTL1 = INCH_11;
+              delay_ms(1);
+              ADC10CTL0 |= ENC + ADC10SC;
+
+              while (!(ADC10CTL0 & ADC10IFG));
+              unsigned long temp=(ADC10MEM * 50001)/10241;
+
+              putchar('0'+temp/1000);
+              LCD_Num(temp);
+              LCD_Text("mV");
+
+              ADC10CTL0&=~ENC;
+              ADC10CTL0=0;
+            }
 
             if ((key==KEY_DOWN)||(key==KEY_UP))
             {
               gotoxy(0,y);
               putchar(' ');
 
-              if ((key==KEY_DOWN)&&(y<3)) y++;
+              if ((key==KEY_DOWN)&&(y<2)) y++;
               else if ((key==KEY_UP)&&(y>0)) y--;
 
               gotoxy(0,y);
@@ -1181,59 +1101,29 @@ int main(void)
                 Settings.SciNot=!Settings.SciNot;
                 x=3;
               }
-              else if (y==3)
-              {
-                Settings.ColorStack=!Settings.ColorStack;
-                x=4;
-              }
             }
 
             if ((x==1)||(x==5))
             {
-              gotoxy(16,0);
+              gotoxy(17,0);
               Number2(Settings.DecPlaces);
             }
             if ((x==2)||(x==5))
             {
-              gotoxy(15,1);
+              gotoxy(16,1);
               if (Settings.DegRad) LCD_Text("Deg");
               else LCD_Text("Rad");
             }
             if ((x==3)||(x==5))
             {
-              gotoxy(15,2);
+              gotoxy(16,2);
               if (Settings.SciNot) LCD_Text(" On");
-              else LCD_Text("Off");
-            }
-            if ((x==4)||(x==5))
-            {
-              gotoxy(15,3);
-              if (Settings.ColorStack) LCD_Text(" On");
               else LCD_Text("Off");
             }
             x=0;
           } while ((key!=KEY_ESCAPE)&&(key!=KEY_ENTER));
 
-          if (i!=Settings.DecPlaces)
-          {
-            j=2;
-
-            for (i=0;i<MATH_TRIG_TABLE;i++)
-            {
-              trig[i*MATH_ENTRY_SIZE+BCD_LEN]=j+Settings.DecPlaces;
-              if (IsZero(trig+i*MATH_ENTRY_SIZE)) break;
-            }
-            Settings.TrigTableSize=i+1;
-            for (i=0;i<MATH_LOG_TABLE;i++)
-            {
-              logs[i*MATH_ENTRY_SIZE+BCD_LEN]=j+Settings.DecPlaces;
-              if (IsZero(logs+i*MATH_ENTRY_SIZE)) break;
-            }
-            Settings.LogTableSize=i+1;
-
-            perm_K[BCD_LEN]=1+Settings.DecPlaces;
-            perm_log10[BCD_LEN]=1+Settings.DecPlaces;
-          }
+          if (i!=Settings.DecPlaces) SetDecPlaces();
 
           UART_Send(SlaveSettings,true);
           UART_Send((unsigned char)Settings.DecPlaces,true);
@@ -1244,20 +1134,33 @@ int main(void)
           key=0;
           redraw=true;
           break;
-        case 'w'://swap
-          if (stack_ptr>=2)
+        case 'v'://switch stack
+          if (which_stack==0)
           {
-            CopyBCD(stack_buffer,BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE);
-            CopyBCD(BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE,BCD_stack+(stack_ptr-2)*MATH_CELL_SIZE);
-            CopyBCD(BCD_stack+(stack_ptr-2)*MATH_CELL_SIZE,stack_buffer);
+            which_stack=1;
+            P1OUT|=RAM_BANK;
+          }
+          else
+          {
+            which_stack=0;
+            P1OUT&=~RAM_BANK;
+          }
+          redraw=true;
+          break;
+        case 'w'://swap
+          if (stack_ptr[which_stack]>=2)
+          {
+            CopyBCD(stack_buffer,BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE);
+            CopyBCD(BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE,BCD_stack+(stack_ptr[which_stack]-2)*MATH_CELL_SIZE);
+            CopyBCD(BCD_stack+(stack_ptr[which_stack]-2)*MATH_CELL_SIZE,stack_buffer);
             redraw=true;
           }
           break;
         case 'x'://x^2
-          if (stack_ptr>=1)
+          if (stack_ptr[which_stack]>=1)
           {
-            CopyBCD(p0,BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE);
-            MultBCD(stack_buffer,p0,BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE);
+            CopyBCD(p0,BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE);
+            MultBCD(stack_buffer,p0,BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE);
             process_output=1;
             redraw=true;
           }
@@ -1266,9 +1169,9 @@ int main(void)
           key=KEY_ESCAPE;
           break;
         case 'z'://clear
-          if (stack_ptr>=1)
+          if (stack_ptr[which_stack]>=1)
           {
-            stack_ptr=0;
+            stack_ptr[which_stack]=0;
             redraw=true;
           }
           break;
@@ -1289,12 +1192,12 @@ int main(void)
         }
       }
 
-      if (process_output==2) stack_ptr--;
+      if (process_output==2) stack_ptr[which_stack]--;
       if (process_output>0)
       {
         FullShrinkBCD(stack_buffer);
         if (IsZero(stack_buffer)&&(stack_buffer[BCD_SIGN])) stack_buffer[BCD_SIGN]=0;
-        CopyBCD(BCD_stack+(stack_ptr-1)*MATH_CELL_SIZE,stack_buffer);
+        CopyBCD(BCD_stack+(stack_ptr[which_stack]-1)*MATH_CELL_SIZE,stack_buffer);
       }
     }
     if (clear_shift)
@@ -1308,49 +1211,20 @@ int main(void)
   return 0;
 }
 
-/*
-#pragma vector=USCIAB0RX_VECTOR
-__interrupt void USCI0RX_ISR(void)
-{
-  UC0IFG &= ~UCA0RXIFG;
-  //RXD_Buff = UCA0RXBUF;
-}
-
-#pragma vector=USCIAB0TX_VECTOR
-__interrupt void USCI0TX_ISR(void)
-{
-  UC0IFG &= ~UCA0TXIFG;
-}
-*/
-
-__attribute__((interrupt(TIMER0_A0_VECTOR))) static void TA0_ISR(void)
-{
-  //P2OUT&=~LCD_NEG;
-  //__delay_cycles(CHARGE_CYCLES);
-  //P2OUT|=LCD_NEG;
-}
-
-/*static void delay_ms(int ms)
-{
-  volatile int i;
-  for (i=0;i<ms;i++) __delay_cycles(16000);
-}*/
-
 static void Init()
 {
   unsigned int i=0;
 
   LCD_Init();
 
-  //delay_ms(100);
-
-  Settings.ColorStack=true;
   Settings.DecPlaces=12;
   Settings.DegRad=true;
   Settings.LogTableSize=MATH_LOG_TABLE;
   Settings.SciNot=false;
   Settings.TrigTableSize=MATH_TRIG_TABLE;
-  stack_ptr=0;
+  stack_ptr[0]=0;
+  stack_ptr[1]=0;
+  which_stack=0;
 
   UC0IFG&=~UCA0RXIFG;
   LCD_Text("Syncing");
@@ -1391,20 +1265,36 @@ static void Init()
     }
   }
 
-  gotoxy(0,1);
-  LCD_Text("Writing...");
 
+  gotoxy(0,1);
+  LCD_Text("Writing RAM 0...");
+  ImmedBCD("0",perm_zero);
+  ImmedBCD(K,perm_K);
+  ImmedBCD(log10_factor,perm_log10);
   UART_Send(SlaveMakeTables,true);
   UART_Receive(true);
+  gotoxy(16,1);
+  LCD_Text("Done");
+
+  gotoxy(0,2);
+  LCD_Text("Writing RAM 1...");
+  P1OUT|=RAM_BANK;
+  ImmedBCD("0",perm_zero);
+  ImmedBCD(K,perm_K);
+  ImmedBCD(log10_factor,perm_log10);
+  UART_Send(SlaveMakeTables,true);
+  UART_Receive(true);
+  gotoxy(16,2);
+  LCD_Text("Done");
+
+  P1OUT&=~RAM_BANK;
+  SetDecPlaces();
 
   UART_Send(SlaveSettings,true);
   UART_Send((unsigned char)Settings.DecPlaces,true);
   UART_Send((unsigned char)Settings.DegRad,true);
   UART_Send((unsigned char)Settings.LogTableSize,true);
   UART_Send((unsigned char)Settings.TrigTableSize,true);
-
-  UART_Send(SlaveSetDecPlaces,true);
-  UART_Receive(true);
 
   static unsigned const char CustomChars[]={0,0,0,0,0,0,7,4,         //CUST_NW
                                             0,0,0,0,0,0,28,4,        //CUST_NE
@@ -1417,11 +1307,6 @@ static void Init()
 
   LCD_Byte(0x40,0);
   for (i=0;i<64;i++) LCD_Byte(CustomChars[i],1);
-
-  ImmedBCD("0",perm_zero);
-
-  gotoxy(10,1);
-  LCD_Text("Done");
 }
 
 static void LCD_Nibble(unsigned char nibble, unsigned char RS)
@@ -1520,7 +1405,6 @@ static unsigned char GetKey()
 {
   volatile unsigned char i,j,k=0,l=0;
 
-  //gotoxy(0,0);
   for (j=0;j<6;j++)
   {
     P2OUT&=0xC0;
@@ -1537,18 +1421,6 @@ static unsigned char GetKey()
       if (P1IN & SR_DATA)
       {
         k++;
-        /*l++;
-        if (l==2)
-        {
-          LCD_Hex(k);
-          for(;;)
-          {
-            P1OUT|=BUFFER_EN;
-            delay_ms(250);
-            P1OUT&=~BUFFER_EN;
-            delay_ms(250);
-          }
-        }*/
         return j*7+i;
       }
 
@@ -1557,8 +1429,6 @@ static unsigned char GetKey()
       P1OUT|=SR_CLOCK;
 
     }
-    //LCD_Hex(k);
-    //putchar(' ');
   }
   return 0;
 }
@@ -1680,7 +1550,6 @@ static bool IsZero(unsigned char *n1)
   return false;
 }
 
-//see if using this in other places makes things smaller
 static void CopyBCD(unsigned char *dest, unsigned char *src)
 {
   UART_Send(SlaveCopy,true);
@@ -1712,7 +1581,6 @@ static void RolBCD(unsigned char *result, unsigned char *arg, unsigned int amoun
   UART_SendWord(amount,true);
 }
 
-//Does shifting one bit add an extra 0?
 static void RorBCD(unsigned char *result, unsigned char *arg, unsigned int amount)
 {
   UART_Send(SlaveRor,true);
@@ -1784,7 +1652,6 @@ static unsigned char CompVarBCD(unsigned char *var1, unsigned char *var2)
   return UART_Receive(false);
 }
 
-//convert angle to 0-90 format and put in p3
 static unsigned char TrigPrep(unsigned int stack_ptr_copy, int *cosine)
 {
   UART_Send(SlaveTrigPrep,true);
@@ -1793,7 +1660,7 @@ static unsigned char TrigPrep(unsigned int stack_ptr_copy, int *cosine)
   return UART_Receive(false);
 }
 
-void DrawStack(bool menu, bool input, int stack_ptr)
+void DrawStack(bool menu, bool input, int stack_pointer)
 {
   int i,j=4,k,k_end,l,m;
   if (menu) j--;
@@ -1803,30 +1670,22 @@ void DrawStack(bool menu, bool input, int stack_ptr)
     gotoxy(0,i);
     putchar('0'+j-i);
     putchar(':');
-    if ((stack_ptr-j+i)>=0)
+    if ((stack_pointer-j+i)>=0)
     {
-      //This should be done at the end of all calculations
-      //FullShrinkBCD(BCD_stack+(stack_ptr-j+i)*MATH_CELL_SIZE);
-      if (BCD_stack[(stack_ptr-j+i)*MATH_CELL_SIZE+BCD_DEC]==0)
+      if (BCD_stack[(stack_pointer-j+i)*MATH_CELL_SIZE+BCD_DEC]==0)
       {
-        PadBCD(BCD_stack+(stack_ptr-j+i)*MATH_CELL_SIZE,1);
+        PadBCD(BCD_stack+(stack_pointer-j+i)*MATH_CELL_SIZE,1);
       }
-      CopyBCD(p1,BCD_stack+(stack_ptr-j+i)*MATH_CELL_SIZE);
+      CopyBCD(p1,BCD_stack+(stack_pointer-j+i)*MATH_CELL_SIZE);
 
       if (Settings.SciNot)
       {
         if (IsZero(p1)) LCD_Text("0.e0");
         else
         {
-          //printf("*");
-          //PrintBCD(p1,-1);
           k=0;
           for (l=0;l<p1[BCD_LEN];l++) if (p1[l+3]) k=l;
           p1[BCD_LEN]=k+1;
-          //printf("!");
-          //PrintBCD(p1,-1);
-          //printf("*");
-          //getch();
 
           for (l=0;l<p1[BCD_LEN];l++) if (p1[l+3]!=0) break;
 
@@ -1868,9 +1727,6 @@ void DrawStack(bool menu, bool input, int stack_ptr)
           if (k/100) {putchar('0'+(k/100));m=1;}
           if (((k%100)/10)||m) {putchar('0'+(k%100)/10);m=1;}
           putchar('0'+k%10);
-
-          //printf("Len: %d\n",x1[BCD_LEN]-i);
-          //printf("E: %d\n",x1[BCD_DEC]-i-1);
         }
       }
       else
@@ -1915,8 +1771,6 @@ void DrawStack(bool menu, bool input, int stack_ptr)
         }
         for (l=3;l<k_end+3;l++)
         {
-          //if (p1[BCD_DEC]==k-3) putchar('.');
-          //putchar(p1[k]+'0');
           putchar(p1[l]+'0');
           if (p1[BCD_DEC]==l-2)
           {
@@ -1951,8 +1805,6 @@ void DrawInput(unsigned char *line, int input_ptr, int offset, bool menu)
       if (line[i+offset])
       {
         putchar('>');
-        //gotoxy(25,6);
-        //printf("%c %d     ",line[i+offset+1],i+offset+1);
       }
     }
     else
@@ -1963,7 +1815,6 @@ void DrawInput(unsigned char *line, int input_ptr, int offset, bool menu)
         else
         {
           done=true;
-          //putchar(' ');
         }
       }
       if (done) putchar(' ');
@@ -2049,23 +1900,51 @@ static void Number2(int num)
 
 static void SetDecPlaces()
 {
+  int i,j=2,x;
 
+  for (x=0;x<2;x++)
+  {
+    if (x==0) P1OUT&=~RAM_BANK;
+    else P1OUT|=RAM_BANK;
+
+    j=2;
+    for (i=0;i<MATH_TRIG_TABLE;i++)
+    {
+      trig[i*MATH_ENTRY_SIZE+BCD_LEN]=j+Settings.DecPlaces;
+      if (IsZero(trig+i*MATH_ENTRY_SIZE)) break;
+    }
+    Settings.TrigTableSize=i+1;
+    for (i=0;i<MATH_LOG_TABLE;i++)
+    {
+      logs[i*MATH_ENTRY_SIZE+BCD_LEN]=j+Settings.DecPlaces;
+      if (IsZero(logs+i*MATH_ENTRY_SIZE)) break;
+    }
+    Settings.LogTableSize=i+1;//this was +0 on slave
+
+    perm_K[BCD_LEN]=1+Settings.DecPlaces;
+    perm_log10[BCD_LEN]=1+Settings.DecPlaces;
+  }
+  if (which_stack==0) P1OUT&=~RAM_BANK;
+  else P1OUT|=RAM_BANK;
 }
 
 static void TestRAM()
 {
-  /*unsigned int ia;
+  unsigned int ia;
   unsigned int address,oldaddress;
-  LCD_Text("Testing RAM...");
+  ClrLCD();
+  LCD_Text("Testing RAM ");
+  if (RAM_BANK&P1OUT) putchar('1');
+  else putchar('0');
+  LCD_Text("...");
 
   #define ADDRESS_RANGE 65535
-
-  RXD_Buff=0;
 
   address=0;
   oldaddress=1;
   gotoxy(0,2);
   LCD_Text("Writing...");
+
   while (address!=ADDRESS_RANGE)
   {
     for (ia=0;ia<138;ia++)
@@ -2077,11 +1956,7 @@ static void TestRAM()
         oldaddress=address>>8;
       }
 
-      UART_Send(0);
-      UART_Send(address>>8);
-      UART_Send(address&0xFF);
-      UART_Send(ia);
-      UART_Receive();
+      RAM_Write((unsigned char*)address,ia&0xFF);
       address++;
       if (address==ADDRESS_RANGE) break;
     }
@@ -2100,15 +1975,12 @@ static void TestRAM()
         LCD_Num(address>>8);
         oldaddress=address>>8;
       }
-      UART_Send(1);
-      UART_Send(address>>8);
-      UART_Send(address&0xFF);
-      RXD_Buff=UART_Receive();
-      if (RXD_Buff!=ia)
+      if (ia!=RAM_Read((unsigned char*)address))
       {
         gotoxy(0,1);
-        LCD_Text("Mismatch ");
-        LCD_Num(RXD_Buff);
+        LCD_Text("Mismatch 0x");
+        LCD_Hex(address>>8);
+        LCD_Hex(address&0xFF);
         putchar(':');
         LCD_Num(ia);
         for(;;);
@@ -2116,5 +1988,5 @@ static void TestRAM()
       address++;
       if (address==ADDRESS_RANGE) break;
     }
-  }*/
+  }
 }
